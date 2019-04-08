@@ -18,7 +18,7 @@ Package:
 
 [/resource/js,/resource/css] jquery.chosen
 
-[/resource/js] jquery.highlightRegex
+[/resource/js] https://github.com/page7/highlight
 
 [/resource/js] jquery.sortable
 

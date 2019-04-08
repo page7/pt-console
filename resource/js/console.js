@@ -127,30 +127,33 @@ $(function(){
         }
     });
 
-    if ($.fn.highlightRegex !== undefined) {
-        doc.on('keyup', '[data-search]', function(e){
-            var target  = $(this).data("search");
-            var val = $.trim(this.value);
-            var regex   = new RegExp(val, "ig");
-            $(target).highlightRegex({tagType:"mark"});
+    if ($.fn.highlight !== undefined) {
 
-            if (val == "") return;
-            if (regex !== undefined){
-                $(target).highlightRegex(regex, {tagType:"mark"});
+        doc.on('ready pjax:success', function(event) {
+
+            var _searchInput = $('input[data-search]');
+
+            if (_searchInput.length) {
+                _searchInput.each(function(){
+                    var _this = $(this),
+                        val = _this.val();
+                        _target = $(_this.data("search"));
+
+                    _target.highlight();
+
+                    if ($.trim(val)) {
+                        _target.trigger("search.highlight", $.trim(val));
+                    } else {
+                        _target.trigger("clear.highlight");
+                    }
+
+                    _this.keyup(function(){
+                        _target.trigger("clear.highlight").trigger("search.highlight", _this.val());
+                    });
+                });
             }
-        });
 
-        var _searchInput = $('input[data-search]');
-        if(_searchInput.length) {
-            _searchInput.each(function(){
-                var _this = $(this);
-                var val = $.trim(this.value);
-                if (val != "") {
-                    var regex = new RegExp(val, "ig");
-                    $(_this.data("search")).highlightRegex(regex, {tagType:"mark"});
-                }
-            });
-        }
+        })
     }
 
     window.tinymces = [];

@@ -24,3 +24,6 @@ Package:
 
 [/resource/js,/resource/css] jquery.zdatepicker
 
+Demo:
+
+https://github.com/page7/pt-console-v3

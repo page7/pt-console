@@ -1056,7 +1056,6 @@ a.list-group-item:hover { background:#eeeeee; }
 
 @media screen and (min-width:768px) {
 	#header .navbar-brand { background:#3785ea; min-width:170px; }
-	#header .navbar-brand .label { left:auto; right:10px; }
 	#header .navbar-collapse { background:transparent; box-shadow:none; }
 	.nav-sidebar > .active { background:rgba(255,255,255,.2); }
 	.nav-sidebar > .active > a,
@@ -1066,7 +1065,7 @@ a.list-group-item:hover { background:#eeeeee; }
 
 	#sidebar { width:70px; z-index:1000; }
 	#sidebar .row,
-	#sidebar .row:after { width:70px; }
+	#sidebar .row:after { width:70px; margin-top:50px; }
 }
 
 @media screen and (min-width:992px) {

@@ -4,7 +4,7 @@
         <!--- filter -->
         <div class="btn-group" style="margin:20px 0px; margin-right:10px;">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-                操作 <span class="caret"></span>
+                <?=__('Operate') ?> <span class="caret"></span>
             </button>
             <ul class="dropdown-menu" role="menu">
                 <?php
@@ -32,6 +32,15 @@
 
         <input type="hidden" name="module" value="<?php echo MODULE; ?>" />
         <input type="hidden" name="operate" value="<?php echo OPERATE; ?>" />
+        <?php
+        if (!empty($config['params'])) {
+            foreach ($config['params'] as $key => $val) {
+        ?>
+        <input type="hidden" name="<?php echo $key; ?>" value="<?php echo $val; ?>" />
+        <?php
+            }
+        }
+        ?>
     </form>
 
     <div class="col-xs-8 col-sm-6 col-md-6 col-lg-4 text-right">
@@ -67,7 +76,7 @@
                 }
                 if (!empty($config['buttons']))
                 {
-                    echo '<th class="bw'.count($config['buttons']).'">操作</th>';
+                    echo '<th class="bw'.count($config['buttons']).'">' . __('Operate') . '</th>';
                 }
                 ?>
             </tr>
@@ -82,7 +91,7 @@
                 }
                 if (!empty($config['buttons']))
                 {
-                    echo '<th>操作</th>';
+                    echo '<th>' . __('Operate') . '</th>';
                 }
                 ?>
             </tr>
@@ -94,7 +103,7 @@
             ?>
                 <tr class="active">
                     <td colspan="<?php echo count($config['fields']) + (!empty($config['buttons']) ? 2 : 1); ?>">
-                        <div class="empty">还没有任何数据</div>
+                        <div class="empty"><?=__('no_data') ?></div>
                     </td>
                 </tr>
             <?php
@@ -107,7 +116,7 @@
                 {
             ?>
             <tr data-id="<?php echo $data['id']; ?>">
-                <td><input type="checkbox" class="checkbox" value="<?php echo $data['id']?>" /></td>
+                <td title="ID: <?php echo $data['id']; ?>"><input type="checkbox" class="checkbox" value="<?php echo $data['id']?>" /></td>
                 <?php
 
                 foreach($config['fields'] as $field)
@@ -149,7 +158,27 @@
 
                     foreach ($config['buttons'] as $k => $v)
                     {
-                        echo console::button($k, $v, $data, 'a', $_suffix, $modal). ' ';
+                        if (isset($v['subbtns']))
+                        {
+                            echo '<div class="btn-group">',
+                                console::button($k, $v, $data, 'a', $_suffix, $modal),
+                                '<button type="button" class="btn ' . (!empty($config['class']) ? $config['class'] : 'btn-default') . ' dropdown-toggle" data-toggle="dropdown"> <span class="caret"></span> </button>
+                                <ul class="dropdown-menu">';
+
+                            foreach ($v['subbtns'] as $sk => $s) {
+                                if ($s === '---')
+                                    echo '<li role="separator" class="divider"></li>';
+                                else
+                                    echo console::button($sk, $s, $data, 'li', $_suffix, $modal);
+                            }
+
+                            echo '</ul>
+                            </div> ';
+                        }
+                        else
+                        {
+                            echo console::button($k, $v, $data, 'a', $_suffix, $modal), ' ';
+                        }
                     }
 
                     echo '</td>';
@@ -172,7 +201,7 @@
         <!--- filter -->
         <div class="btn-group" style="margin:20px 0px;">
             <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-                操作 <span class="caret"></span>
+                <?=__('Operate') ?> <span class="caret"></span>
             </button>
             <ul class="dropdown-menu" role="menu">
                 <?php

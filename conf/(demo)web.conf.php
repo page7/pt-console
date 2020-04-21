@@ -1,6 +1,6 @@
 <?php
 /**
- * 项目配置
+ * Config
  * project web config
  +-----------------------------------------
  * @author      nolan.chou <zhounan0120@gmail.com>
@@ -9,8 +9,9 @@
 
 return array(
     // custom
-    'title'             => '拿铁旅游',
-    'title_abbr'        => '拿铁',
+    'title'             => 'DEMO',
+    'title_abbr'        => 'demo',
     'version'           => 'A1.0',
+    'resources_url'     => '/resource/',
 );
 

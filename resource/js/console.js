@@ -99,16 +99,16 @@ $(function(){
         }
     });
 
-    $("#header a").click(function(){ sidebar.find("li.active").removeClass("active"); });
+    doc.on("click", "#header a", function(){ sidebar.find("li.active").removeClass("active"); });
 
-    $(".table .checked-all").click(function(){
+    doc.on("click", ".table .checked-all", function(){
         var _c = $(this);
         var table = _c.parents(".table").eq(0);
         var checked = _c.prop("checked");
         table.find("input.checkbox").prop("checked", checked);
     });
 
-    $(".pagination input").keyup(function(e){
+    doc.on("keyup", ".pagination input", function(e){
         if (e.which == 13){
             var url = $(this).data("url");
             var page = parseInt($(this).val(), 10);
@@ -160,11 +160,7 @@ $(function(){
 
     if ($.support.pjax) {
 
-        doc.on('click', 'a[data-pjax-container]', function(event) {
-            var _this = $(this),
-                container = $(_this.data('pjax-container'));
-            $.pjax.click(event, {container: container});
-        });
+        doc.on('click', 'a[data-pjax]', $.pjax.click);
 
         doc.on('pjax:beforeSend', function(event, xhr) {
 
@@ -210,6 +206,8 @@ $(function(){
                 break;
 
             case 'focusin':
+                if (i.data('_tc')) return;
+
                 var g = i.parents('.input-group'), c = $('<i class="txt-count" style="display:none"></i>');
                 if (g.length) {
                     g.after(c);
@@ -242,9 +240,14 @@ $(function(){
             url = location.search;
 
         if (operate === undefined) return;
+        delete data.operate;
 
         if (data.url !== undefined) {
             url = data.url;
+            delete data.url;
+        } else if (data.module !== undefined) {
+            url = location.pathname + '?module=' + data.module;
+            delete data.module;
         } else {
             var regexp = /module=([a-zA-Z_]+)?/;
             module = url.match(regexp);
@@ -255,13 +258,18 @@ $(function(){
             b.prop("disabled", true);
             $.post(url+'&operate=' + operate, data, function(data){
                 b.prop("disabled", false);
+                if (b.parents(".modal").length) {
+                    $("body").removeClass("modal-open");
+                }
                 if (data.s == 0){
                     if ($.support.pjax) {
                         $.pjax({ url: location.pathname + location.search + "&_=" + new Date().getTime(), container: "#main" });
                     } else {
                         location.href = location.pathname + location.search + "&_=" + new Date().getTime();
                     }
-                }else{
+                } else if (data.s < 0 && data.rs.alert !== undefined) {
+                    alert(data.err, data.rs.alert);
+                } else {
                     alert(data.err, "error");
                 }
             }, "json");
@@ -292,6 +300,7 @@ $(function(){
     // Image Upload
     window.image_uploader = function(module, id, multiple, tmpl) {
         var updom = $("#"+id),
+            path = updom.data("path"),
             multiple = multiple === undefined ? false : multiple,
             uploader = new plupload.Uploader({
                 runtimes : 'html5,flash,html4',
@@ -331,7 +340,7 @@ $(function(){
                             if(!data.s){
                                 $("#" + file.id)
                                     .removeClass("image-loading")
-                                    .css({"background-image":"url(/upload/"+data.rs+")"})
+                                    .css({"background-image":"url("+path+data.rs+")"})
                                     .html('<input type="hidden" name="'+id+(multiple ? '[]' : '')+'" value="" />' + tmpl)
                                     .find("input").eq(0).val(data.rs);
 
@@ -377,6 +386,8 @@ $(function(){
             var src = $(e.relatedTarget),
                 url = src.data("url");
 
+            if (!url) return;
+
             body.addClass('modal-loading');
 
             $.ajax({
@@ -397,36 +408,33 @@ $(function(){
 
                         body.removeClass('modal-loading').html(data);
 
-                        form = body.find("form");
-                        btn = body.find(".btn-save");
-
-                        btn.click(function(){
+                        modal.find(".modal-footer .btn-save").on("click", function(){
 
                             var btn = $(this);
 
-                            if (btn.is(".btn-save")) {
+                            form = body.find("form");
 
-                                btn.prop("disabled", true);
-                                if (btn.is(".btn-save")) btn.text("保存中..");
+                            btn.prop("disabled", true);
+                            if (btn.is(".btn-save")) btn.text("保存中..");
 
-                                $.post(form.attr("action"), form.serialize(), function(data){
-                                    btn.prop("disabled", false)
-                                    btn.text("保存");
+                            $.post(form.attr("action"), form.serialize(), function(data){
+                                btn.prop("disabled", false)
+                                btn.text("保存");
 
-                                    if (data.s == 0){
-                                        modal.on('hidden.bs.modal', function (e) {
-                                            if ($.support.pjax) {
-                                                $.pjax({ url: location.pathname + location.search + (btn.is(".btn-save") ? "#success" : ''), container: "#main" });
-                                            } else {
-                                                location.href = location.pathname + location.search + (btn.is(".btn-save") ? "#success" : '');
-                                            }
-                                        }).modal("hide");
-                                    } else {
-                                        alert(data.err, 'error', null, body.children(".modal-body"));
-                                    }
-                                }, "json");
-
-                            }
+                                if (data.s == 0){
+                                    modal.on('hidden.bs.modal', function (e) {
+                                        if ($.support.pjax) {
+                                            $.pjax({ url: location.pathname + location.search + (btn.is(".btn-save") ? "#success" : ''), container: "#main" });
+                                        } else {
+                                            location.href = location.pathname + location.search + (btn.is(".btn-save") ? "#success" : '');
+                                        }
+                                    }).modal("hide");
+                                } else if (data.s < 0 && data.rs.alert !== undefined) {
+                                    alert(data.err, data.rs.alert, null, body.children(".modal-body"));
+                                } else {
+                                    alert(data.err, 'error', null, body.children(".modal-body"));
+                                }
+                            }, "json");
 
                         });
                     };

@@ -2,6 +2,7 @@
 
 use pt\framework\template as template;
 use pt\framework\db as db;
+use pt\framework\event as event;
 use pt\tool\page as page;
 
 class console
@@ -19,10 +20,13 @@ class console
     // 模板路径
     public static $tmpl_path = '/common/console/';
 
+    // 文件上传路径
+    public static $upload_path = '/upload/';
+
 
     // =================== 列表项 ===================
 
-    public static function table($config, $where='1=1', $condition=array(), $sort='`id` DESC')
+    public static function table($config, $where='1=1', $condition=array(), $sort='`id` DESC', $page=10)
     {
         $db = db::init();
         $table = self::$dbtable;
@@ -34,17 +38,15 @@ class console
             $_search = array();
             foreach ($config['search'] as $field)
             {
-                $_search[] = "`{$field}` LIKE :keyword";
+                if (false === strpos($field, '.'))
+                    $_search[] = "`{$field}` LIKE :keyword";
+                else
+                    $_search[] = $field;
             }
 
             $where .= ' AND (' . implode(' OR ', $_search) . ')';
             $condition[':keyword'] = '%'.$keyword.'%';
         }
-
-        $count = $db -> prepare("SELECT COUNT(*) AS `c` FROM `{$table}` AS a WHERE {$where};") -> execute($condition);
-        $page = new page($count[0]['c'], 10);
-        $limit = $page -> limit();
-        $page = $page -> show();
 
         $fields = array('a.`id`');
         $join = array();
@@ -69,12 +71,25 @@ class console
         $fields = implode(',', $fields);
         $join = implode("\n", $join);
 
+        if ($page)
+        {
+            $count = $db -> prepare("SELECT COUNT(*) AS `c` FROM `{$table}` AS a {$join} WHERE {$where};") -> execute($condition);
+            $page = new page($count[0]['c'], $page);
+            $limit = 'LIMIT '.$page -> limit();
+            $page = $page -> show();
+        }
+        else
+        {
+            $limit = '';
+            $page = array();
+        }
+
         $sql = "SELECT {$fields}
                 FROM `{$table}` AS a
                     {$join}
                 WHERE {$where}
                 ORDER BY {$sort}
-                LIMIT {$limit};";
+                {$limit};";
         $list = $db -> prepare($sql) -> execute($condition);
 
         $assign = array(
@@ -137,6 +152,7 @@ class console
             else
             {
                 $data = array();
+                $inner = $class = null;
 
                 foreach ($config['fields'] as $name => $field)
                 {
@@ -152,7 +168,7 @@ class console
                                 $val = $field['default'];
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
                             break;
 
                         case 'custom':
@@ -162,7 +178,7 @@ class console
                                 $val = $field['default'];
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
                             break;
 
                         case 'remove':
@@ -183,10 +199,12 @@ class console
                             }
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
 
                             if (!empty($field['must']) && ($val === null || $val === ""))
                             {
+                                event::trigger('console::form_save_field_empty', $field, $val);
+
                                 if (is_bool($field['must']))
                                     json_return(null, 1, '请填写'.$field['name']);
                                 else
@@ -205,6 +223,7 @@ class console
                     list($sql, $value) = array_values(update_array($data));
                     $value[':id'] = $id;
                     $rs = $db -> prepare("UPDATE `{$table}` SET {$sql} WHERE `id`=:id") -> execute($value);
+                    $data['id'] = $id;
                 }
                 else
                 {
@@ -212,16 +231,18 @@ class console
                         $data['pid'] = (int)$_POST['pid'];
 
                     list($columns, $sql, $value) = array_values(insert_array($data));
-                    $id = $rs = $db -> prepare("INSERT INTO `{$table}` {$columns} VALUES {$sql};") -> execute($value);
+                    $data['id'] = $id = $rs = $db -> prepare("INSERT INTO `{$table}` {$columns} VALUES {$sql};") -> execute($value);
                 }
 
             }
 
             if (false === $rs)
             {
+                event::trigger('console::form_save_fail', 101, $data);
                 json_return(null, 101, '数据保存失败，请重试');
             }
 
+            event::trigger('console::form_save_success', $rs, $data);
             json_return($id);
         }
 
@@ -318,7 +339,7 @@ class console
     // 表单字段批处理
     public static function input($data, &$class, &$inner, $name, $config)
     {
-        $val = empty($data[$name]) ? null : $data[$name];
+        $val = !isset($data[$name]) || $data[$name] === null ? null : $data[$name];
 
         $attr = array("name=\"{$name}\"");
 
@@ -362,7 +383,7 @@ class console
                 foreach ($vals as $val)
                 {
                     if (!empty($config['callback']))
-                        $val = call_user_func_array($config['callback'], array($val, &$data));
+                        $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
 
                     if (!empty($config['prefix']))
                     {
@@ -445,14 +466,15 @@ class console
                 if (!empty($config['callback']))
                 {
                     $selected = array();
-                    $options = call_user_func_array($config['callback'], array($val, &$data));
+                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
                 }
 
                 $inp = '<select class="form-control ui-select" ' . implode(' ', $attr) . '><option value="">请选择..</option>';
                 foreach ($options as $opt)
                     $inp .= '<option value="'.$opt['val'].'"'.(!empty($opt['selected']) || in_array($opt['val'], $selected) ? ' selected' : '').'>'.$opt['option'].'</option>';
 
-                $inp .= '</select>';
+                $inp .= '</select>'
+                     .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
                 break;
 
 
@@ -478,7 +500,7 @@ class console
                 if (!empty($config['callback']))
                 {
                     $checked = array();
-                    $options = call_user_func_array($config['callback'], array($val, &$data));
+                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
                 }
 
                 $inp = '<div class="btn-group btn-'.$config['type'].'" data-toggle="buttons">';
@@ -487,7 +509,8 @@ class console
                     $_checked = !empty($opt['checked']) || in_array($opt['val'], $checked);
                     $inp .= '<label class="btn btn-default' . ($_checked ? ' active' : '') . '"><input type="'.$config['type'].'" ' . implode(' ', $attr) .' autocomplete="off" value="'.$opt['val'].'"'.($_checked ? ' checked' : '').' />'.$opt['option'].'</label>';
                 }
-                $inp .= '</div>';
+                $inp .= '</div>'
+                     .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
 
                 break;
 
@@ -517,16 +540,16 @@ class console
 
                 array_push($inner['styles'],
                     ".up_{$name} .image { width:{$config['size'][0]}px; height:{$config['size'][1]}px; }",
-                    ".up_{$name} .image:before { padding-top:". round(($config['size'][1] - 75)/2) ."px; }"
+                    ".up_{$name} .image:before { padding-top:". round(($config['size'][1] - 70)/2) ."px; }"
                 );
 
                 if ($val)
                 {
                     foreach ($val as $v)
-                        $inp .= '<div class="image" style="background-image:url(/upload/'.$v.'); background-size:cover;"><input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="'.$v.'" />'.$tmpl.'</div>';
+                        $inp .= '<div class="image" style="background-image:url('.self::$upload_path.$v.'); background-size:cover;"><input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="'.$v.'" />'.$tmpl.'</div>';
                 }
 
-                $inp .= '<div id="' . $name . '" '.($val && !$multiple ? 'style="display:none" ' : '').'class="image image-empty">'.($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />').'选择图片</div>'
+                $inp .= '<div id="' . $name . '" '.($val && !$multiple ? 'style="display:none" ' : '').'class="image image-empty" data-path="'.self::$upload_path.'">'.($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />').'选择图片</div>'
                      .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
                 break;
 
@@ -541,7 +564,7 @@ class console
 
             // ========================= 完全自定义 =========================
             case 'custom':
-                $inp = call_user_func_array($config['callback'], array($val, &$data));
+                $inp = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
                 break;
 
 
@@ -687,7 +710,7 @@ class console
         switch ($type)
         {
             case 'li':
-                $class = str_replace(array('btn', 'btn-default', 'btn-primary', 'btn-success', 'btn-info', 'btn-warning', 'btn-danger'), array('', '', 'active', 'bg-success', 'bg-info', 'bg-warning', 'bg-danger'), $class);
+                $class = str_replace(array('btn ', 'btn-default', 'btn-primary', 'btn-success', 'btn-info', 'btn-warning', 'btn-danger'), array('', '', 'active', 'bg-success', 'bg-info', 'bg-warning', 'bg-danger'), $class);
 
                 return "<li><a class=\"{$class}\" {$attr}>{$content}</a></li>";
 

@@ -3,7 +3,7 @@ namespace console;
 
 class plugin extends \console
 {
-
+    // Colorpicker
     static public function colorpicker(&$attr, &$group_class, &$inner)
     {
         $attr['data-colorpicker'] = "data-colorpicker=\"true\"";
@@ -21,6 +21,8 @@ $(function(){
 
     }
 
+
+    // Datepicker
     static public function datepicker(&$attr, &$group_class, &$inner)
     {
         $attr['data-datepicker'] = "data-datepicker=\"true\"";

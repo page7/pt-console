@@ -3,6 +3,11 @@
     <h4 class="modal-title"><?php echo ($data ? '修改' : '新增'), $config['name']; ?></h4>
 </div>
 <div class="modal-body">
+    <?php
+    if (isset($config['intro'])) {
+        echo '<div class="well">', $config['intro'], '</div>';
+    }
+    ?>
     <form id="form-<?php echo NOW; ?>" class="<?php echo isset($config['size']) && $config['size'] == 'sm' ? '' : 'form-horizontal'; ?>" action="<?php echo $_SERVER['REQUEST_URI']; ?>" style="padding: 0 15px;" onsubmit="return false;">
         <?php
         $inner = array('plugins'=>array(), 'script'=>array());

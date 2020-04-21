@@ -2,7 +2,12 @@
 <form class="row" id="form-<?php echo NOW; ?>" role="form" onsubmit="return false;">
 
     <div class="col-md-8 col-lg-9 form-horizontal">
+
     <?php
+        if (isset($config['intro'])) {
+            echo '<div class="well">', $config['intro'], '</div>';
+        }
+
         $inner = array('plugins'=>array());
 
         $modal = array();
@@ -297,6 +302,8 @@ $(function(){
                     location.href = url;
                 }';
                 ?>
+            } else if (data.s < 0 && data.rs.alert !== undefined) {
+                alert(data.err, data.rs.alert);
             } else {
                 alert(data.err, 'error');
             }
@@ -352,6 +359,14 @@ $(function(){
                 'paste_data_images'         => true,
             );
 
+            $app = array(
+                'plugins'       => 'image imagetools code',
+                'toolbar'       => 'bold italic | forecolor backcolor | link image | code',
+                'content_css'   => RESOURCES_URL . '/js/tinymce/h5.css',
+                'image_dimensions'  => false,
+                'valid_elements'    => 'b/strong,i/em,span[style],p[style],img[src],br',
+            );
+
             $h5 = array(
                 'plugins'       => 'autolink link image imagetools code',
                 'toolbar'       => 'styleselect | forecolor | link image | removeformat paste code',
@@ -366,7 +381,7 @@ $(function(){
                 'content_css'   => RESOURCES_URL . '/js/tinymce/full.css',
             );
 
-            $conf = array_merge($base, ($v['mode'] == 'h5' ? $h5 : $full), $v['config']);
+            $conf = array_merge($base, ($v['mode'] && isset($$v['mode']) ? $$v['mode'] : $full), $v['config']);
 
             echo "window.tinymces.push($(\"#{$v['id']}\").tinymce(" . json_encode($conf) . "));";
         }

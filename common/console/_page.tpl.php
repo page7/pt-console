@@ -34,7 +34,7 @@ if($page && $page['total'] > 1)
         echo "<li class=\"{$class}\"><a data-pjax-container=\"#main\" href=\"{$page['url']}{$i}\">{$i}</a></li>";
     }
 
-    echo '<li class="hidden-xs"><span><input title="输入跳转页码后Enter跳转" value="" data-url="'.$page['url'].'" placeholder="Go" /></span></li>';
+    echo '<li class="hidden-xs"><span><input title="'.__('Input page number, Enter to jump').'" value="" data-url="'.$page['url'].'" placeholder="Go" /></span></li>';
 
     echo '<li'.($page['now'] + ceil($page['show']/2) <= $page['total'] ? '' : ' class="disabled"')."><a data-pjax-container=\"#main\" href=\"{$page['url']}{$page['total']}\">&raquo;</a></li>";
 

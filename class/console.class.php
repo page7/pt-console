@@ -1,4 +1,13 @@
 <?php
+/**
+ * Console 核心类库
+ *
+ * @author nolan.chou
+ * @category Pt-console
+ * @copyright Copyright(c) 2021
+ * @version 1.1
+ * @remak: 1.0 => 1.1 input.[field].callback 参数增加 attr
+ */
 
 use pt\framework\template as template;
 use pt\framework\db as db;
@@ -11,22 +20,24 @@ class console
 
     const LOAD = 0;
 
-    // 主表表名
+    const DELETE = -1;
+
+    // DB Table
     public static $dbtable;
 
-    // 当前操作模式
+    // Work mode: 1 input mode / 0 output mode
     public static $mode = 0;
 
-    // 模板路径
+    // Console template path
     public static $tmpl_path = '/common/console/';
 
-    // 文件上传路径
+    // Default upload path
     public static $upload_path = '/upload/';
 
 
-    // =================== 列表项 ===================
+    // =================== Table list page ===================
 
-    public static function table($config, $where='1=1', $condition=array(), $sort='`id` DESC', $page=10)
+    public static function table($config, $where='1=1', $condition=array(), $sort='`id` DESC', $page=10, $group=null)
     {
         $db = db::init();
         $table = self::$dbtable;
@@ -44,7 +55,7 @@ class console
                     $_search[] = $field;
             }
 
-            $where .= ' AND (' . implode(' OR ', $_search) . ')';
+            $where = $where . ' AND (' . implode(' OR ', $_search) . ')';
             $condition[':keyword'] = '%'.$keyword.'%';
         }
 
@@ -73,7 +84,10 @@ class console
 
         if ($page)
         {
-            $count = $db -> prepare("SELECT COUNT(*) AS `c` FROM `{$table}` AS a {$join} WHERE {$where};") -> execute($condition);
+            if (!$group)
+                $count = $db -> prepare("SELECT COUNT(*) AS `c` FROM `{$table}` AS a {$join} WHERE {$where};") -> execute($condition);
+            else
+                $count = $db -> prepare("SELECT COUNT(*) AS `c` FROM (SELECT a.`id` FROM `{$table}` AS a {$join} WHERE {$where} GROUP BY {$group}) AS s;") -> execute($condition);
             $page = new page($count[0]['c'], $page);
             $limit = 'LIMIT '.$page -> limit();
             $page = $page -> show();
@@ -84,10 +98,13 @@ class console
             $page = array();
         }
 
+        $group = $group ? 'GROUP BY '.$group : '';
+
         $sql = "SELECT {$fields}
                 FROM `{$table}` AS a
                     {$join}
                 WHERE {$where}
+                {$group}
                 ORDER BY {$sort}
                 {$limit};";
         $list = $db -> prepare($sql) -> execute($condition);
@@ -107,7 +124,7 @@ class console
 
 
 
-    // =================== 表单项 ===================
+    // =================== Form Page ===================
 
     public static function form($config)
     {
@@ -135,24 +152,41 @@ class console
         {
             $id = (int)$_POST['id'];
 
-            console::$mode = self::SAVE;
-
             if (isset($_POST['remove']))
             {
+                console::$mode = self::DELETE;
+
                 $id = $_POST['remove'];
 
-                $rs = $db -> prepare("DELETE FROM `{$table}` WHERE `id`=:id") -> execute(array(':id'=>$id));
+                $data = $db -> prepare("SELECT * FROM `{$table}` WHERE `id`=:id") -> execute(array(':id'=>$id));
 
-                if (!$item && !empty($config['subitems']))
+                if ($data)
                 {
+                    $data = $data[0];
+
                     foreach ($config['subitems'] as $conf)
-                        $db -> prepare("DELETE FROM `{$conf['db']}` WHERE `pid`=:id") -> execute(array(':id'=>$id));
+                        $data["`{$conf['db']}`"] = $db -> prepare("SELECT * FROM `{$conf['db']}` WHERE `pid`=:id") -> execute(array(':id'=>$id));
+
+                    $rs = $db -> prepare("DELETE FROM `{$table}` WHERE `id`=:id") -> execute(array(':id'=>$id));
+
+                    if ($rs !== false && !$item && !empty($config['subitems']))
+                    {
+                        foreach ($config['subitems'] as $conf)
+                            $db -> prepare("DELETE FROM `{$conf['db']}` WHERE `pid`=:id") -> execute(array(':id'=>$id));
+                    }
+                }
+                else
+                {
+                    $data = null;
+                    $rs = true;
                 }
             }
             else
             {
+                console::$mode = self::SAVE;
+
                 $data = array();
-                $inner = $class = null;
+                $attr = $inner = $class = null;
 
                 foreach ($config['fields'] as $name => $field)
                 {
@@ -161,14 +195,14 @@ class console
                         case 'auto':
                             $val = null;
 
-                            if (isset($field['update']) && $field['update'] == false)
+                            if (isset($field['update']) && $field['update'] == false && $id)
                                 continue 2;
 
                             if (isset($field['default']))
                                 $val = $field['default'];
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$class, &$attr, &$inner, $field));
                             break;
 
                         case 'custom':
@@ -178,7 +212,7 @@ class console
                                 $val = $field['default'];
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$class, &$attr, &$inner, $field));
                             break;
 
                         case 'remove':
@@ -199,14 +233,14 @@ class console
                             }
 
                             if (isset($field['callback']))
-                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class));
+                                $val = call_user_func_array($field['callback'], array($val, &$data, &$inner, &$class, &$attr, &$inner, $field));
 
                             if (!empty($field['must']) && ($val === null || $val === ""))
                             {
                                 event::trigger('console::form_save_field_empty', $field, $val);
 
                                 if (is_bool($field['must']))
-                                    json_return(null, 1, '请填写'.$field['name']);
+                                    json_return(null, 1, $field['name'] . __(' cannot be black.'));
                                 else
                                     json_return(null, 1, $field['must']);
                             }
@@ -238,11 +272,11 @@ class console
 
             if (false === $rs)
             {
-                event::trigger('console::form_save_fail', 101, $data);
-                json_return(null, 101, '数据保存失败，请重试');
+                event::trigger('console::form_'.(console::$mode == 1 ? 'save' : 'delete').'_fail', 101, $data, $table);
+                json_return(null, 101, __('Save data fail.'));
             }
 
-            event::trigger('console::form_save_success', $rs, $data);
+            event::trigger('console::form_'.(console::$mode == 1 ? 'save' : 'delete').'_success', $rs, $data, $table);
             json_return($id);
         }
 
@@ -263,7 +297,9 @@ class console
         $assign = array(
             'config'    => $config,
             'data'      => $data,
-            '_suffix'   => (isset($_GET['page']) ? '&page='.$_GET['page'] : '') . (isset($_GET['keyword']) ? '&keyword='.$_GET['keyword'] : ''),
+            '_suffix'   =>  (!empty($config['params']) ? $config['params'] : '')
+                          . (isset($_GET['page']) ? '&page='.$_GET['page'] : '')
+                          . (isset($_GET['keyword']) ? '&keyword='.$_GET['keyword'] : ''),
         );
 
         if (!$item)
@@ -313,7 +349,7 @@ class console
 
 
 
-    // 模板显示
+    // Display
     public static function display($assign=null, $template=null)
     {
         static $_template = null;
@@ -336,7 +372,7 @@ class console
 
 
 
-    // 表单字段批处理
+    // Form's fields format input dom.
     public static function input($data, &$class, &$inner, $name, $config)
     {
         $val = !isset($data[$name]) || $data[$name] === null ? null : $data[$name];
@@ -376,22 +412,35 @@ class console
                     $attr[] = "maxlength=\"{$config['length']}\"";
 
                 if (!empty($config['plugin']))
-                    call_user_func_array('\console\plugin::'.$config['plugin'], array(&$attr, &$class, &$inner, $config));
+                {
+                    $return = call_user_func_array('\console\plugin::'.$config['plugin'], array(&$attr, &$class, &$inner, $config));
+                    if ($return)
+                    {
+                        $inp = $return;
+                        break;
+                    }
+                }
 
                 $inp_class = implode(' ',  isset($attr['class']) ? array_unshift($attr['class'], 'form-control') : array('form-control'));
 
                 foreach ($vals as $val)
                 {
                     if (!empty($config['callback']))
-                        $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
+                        $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
 
                     if (!empty($config['prefix']))
                     {
-                        $inp .= '<div class="input-group"><span class="input-group-addon">'.(substr($config['prefix'], 0, 3) == 'ico' ? '<font class="'.substr($config['prefix'], 4).'"></font>' : $config['prefix']).'</span><input type="'.$config['type'].'" autocomplete="off" class="'.$inp_class.'" '.implode(' ', $attr).' value="'.$val.'" /></div>';
+                        $inp  .=  '<div class="input-group"><span class="input-group-addon">'
+                                . (substr($config['prefix'], 0, 3) == 'ico' ? '<font class="'.substr($config['prefix'], 4).'"></font>' : $config['prefix'])
+                                . '</span><input type="'.$config['type'].'" autocomplete="off" class="'.$inp_class.'" ' . implode(' ', $attr) . ' value="' . $val . '" />'
+                                . '</div>';
                     }
                     else if (!empty($config['suffix']))
                     {
-                        $inp .= '<div class="input-group"><input type="'.$config['type'].'" autocomplete="off" class="'.$inp_class.'" '.implode(' ', $attr).' value="'.$val.'" /><span class="input-group-addon">'.(substr($config['suffix'], 0, 3) == 'ico' ? '<font class="'.substr($config['suffix'], 4).'"></font>' : $config['suffix']).'</span></div>';
+                        $inp  .=  '<div class="input-group">'
+                                . '<input type="'.$config['type'].'" autocomplete="off" class="'.$inp_class.'" '.implode(' ', $attr).' value="'.$val.'" /><span class="input-group-addon">'
+                                . (substr($config['suffix'], 0, 3) == 'ico' ? '<font class="'.substr($config['suffix'], 4).'"></font>' : $config['suffix'])
+                                . '</span></div>';
                     }
                     else
                     {
@@ -406,8 +455,11 @@ class console
 
                     $inner['script_text'][] = 'input_append_'.NOW;
 
-                    $inp .= '<div id="input_append_'.NOW.'" data-max="'.$config['max'].'" class="empty">增加'.$config['name'].'</div>';
+                    $inp  .=  '<div id="input_append_'.NOW.'" data-max="'.$config['max'].'" class="empty">'
+                            . '<span class="glyphicon glyphicon-plus"></span> '.__('Add a new field input..')
+                            . '</div>';
                 }
+
                 break;
 
 
@@ -422,6 +474,9 @@ class console
                 if (!empty($config['rows']))
                     $attr[] = "rows=\"{$config['rows']}\"";
 
+                if (!empty($config['callback']))
+                    $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
+
                 $inp = '<textarea class="form-control" ' . implode(' ', $attr) . '>' . $val . '</textarea>';
                 break;
 
@@ -431,11 +486,17 @@ class console
                 if (!isset($inner['script_editor']))
                     $inner['script_editor'] = array();
 
+                if ((empty($config['config']) || (isset($config['config']['plugins']) && false !== strpos('image', $config['config']['plugins']))) && !isset($inner['script_image']))
+                    $inner['script_image'] = array();
+
                 $inner['script_editor'][] = array(
                     'id'        => 'editor_'.$name.'_'.NOW,
                     'mode'      => empty($config['mode']) ? 'h5' : $config['mode'],
                     'config'    => empty($config['config']) ? array() : $config['config'],
                 );
+
+                if (!empty($config['callback']))
+                    $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
 
                 $inp = '<textarea id="editor_' . $name.'_'.NOW . '" class="form-control" ' . implode(' ', $attr) . '>' . $val . '</textarea>';
                 break;
@@ -446,13 +507,23 @@ class console
                 if (!isset($inner['script_select']))
                     $inner['script_select'] = array();
 
+                if (isset($inner['chosen_config']))
+                {
+                    $inp_filter = '.ui-select[name="'.$name.(!empty($config['multiple']) ? '[]' : '').'"]';
+                    $inner['script_select'][$inp_filter] = $inner['chosen_config'];
+                }
+
                 if (!empty($config['options']))
                     $options = $config['options'];
 
                 $selected = array($val);
+                $placeholder = __('Select an option');
 
                 if (!empty($config['multiple']))
                 {
+
+                    $placeholder = __('Select some options');
+
                     $attr[0] = "name=\"{$name}[]\"";
                     $attr[] = 'multiple size=1';
                     if (is_bool($config['multiple']))
@@ -466,15 +537,25 @@ class console
                 if (!empty($config['callback']))
                 {
                     $selected = array();
-                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
+                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
                 }
 
-                $inp = '<select class="form-control ui-select" ' . implode(' ', $attr) . '><option value="">请选择..</option>';
+                if (empty($config['placeholder']) || $config['placeholder'])
+                {
+                    $config['placeholder'] = empty($config['placeholder']) || $config['placeholder'] === true ? $placeholder : $config['placeholder'];
+                    $attr['data-placeholder'] = $config['placeholder'];
+                }
+                else
+                {
+                    $config['placeholder'] = false;
+                }
+
+                $inp  =   '<select class="form-control ui-select" ' . implode(' ', $attr) . '>'
+                        . ($config['placeholder'] ? '<option value="">' . $config['placeholder'] . '</option>' : '');
                 foreach ($options as $opt)
                     $inp .= '<option value="'.$opt['val'].'"'.(!empty($opt['selected']) || in_array($opt['val'], $selected) ? ' selected' : '').'>'.$opt['option'].'</option>';
 
-                $inp .= '</select>'
-                     .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
+                $inp .= '</select>';
                 break;
 
 
@@ -500,17 +581,19 @@ class console
                 if (!empty($config['callback']))
                 {
                     $checked = array();
-                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
+                    $options = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
                 }
 
                 $inp = '<div class="btn-group btn-'.$config['type'].'" data-toggle="buttons">';
                 foreach ($options as $opt)
                 {
                     $_checked = !empty($opt['checked']) || in_array($opt['val'], $checked);
-                    $inp .= '<label class="btn btn-default' . ($_checked ? ' active' : '') . '"><input type="'.$config['type'].'" ' . implode(' ', $attr) .' autocomplete="off" value="'.$opt['val'].'"'.($_checked ? ' checked' : '').' />'.$opt['option'].'</label>';
+                    $inp  .=  '<label class="btn btn-default' . ($_checked ? ' active' : '') . '">'
+                            . '<input type="'.$config['type'].'" ' . implode(' ', $attr) .' autocomplete="off" value="'.$opt['val'].'"'.($_checked ? ' checked' : '').' />'
+                            . $opt['option']
+                            . '</label>';
                 }
-                $inp .= '</div>'
-                     .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
+                $inp .= '</div>';
 
                 break;
 
@@ -519,7 +602,7 @@ class console
             // ========================= 图片上传 =========================
             case 'image':
 
-                $class .= "image-upload up_{$name} ";
+                $class .= " image-upload up_{$name} ";
 
                 if (!isset($inner['styles']))
                     $inner['styles'] = array();
@@ -530,7 +613,7 @@ class console
                 $multiple = isset($config['multiple']) && $config['multiple'];
                 $val = array_filter(explode(',', $val));
 
-                $tmpl = isset($config['action_tmpl']) ? $config['action_tmpl'] : '<label class="action"><a class="rm" href="javascript:;"><span class="glyphicon glyphicon-remove"></span></a></label>';
+                $tmpl = isset($config['action_tmpl']) ? $config['action_tmpl'] : '<label class="action"><a class="rm" href="javascript:;"></a></label>';
 
                 $inner['script_image'][] = array(
                     'name'      => $name,
@@ -543,14 +626,33 @@ class console
                     ".up_{$name} .image:before { padding-top:". round(($config['size'][1] - 70)/2) ."px; }"
                 );
 
+                if (!empty($config['callback']))
+                    $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
+
                 if ($val)
                 {
                     foreach ($val as $v)
-                        $inp .= '<div class="image" style="background-image:url('.self::$upload_path.$v.'); background-size:cover;"><input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="'.$v.'" />'.$tmpl.'</div>';
+                        $inp  .=  '<div class="image" style="background-image:url('.self::$upload_path.$v.'); background-size:cover;">'
+                                . '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="'.$v.'" />' . $tmpl
+                                . '</div>';
                 }
 
-                $inp .= '<div id="' . $name . '" '.($val && !$multiple ? 'style="display:none" ' : '').'class="image image-empty" data-path="'.self::$upload_path.'">'.($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />').'选择图片</div>'
-                     .  (empty($config['placeholder']) ? '' : "<p class=\"help-block\">{$config['placeholder']}</p>");
+                $inp  .=  '<div id="' . $name . '" '.($val && !$multiple ? 'style="display:none" ' : '').'class="image image-empty" data-path="'.self::$upload_path.'">'
+                        . ($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />') . __('Choose a picture')
+                        . '</div>';
+                break;
+
+
+            // ========================= 隐藏域 =========================
+            case 'hidden':
+
+                if (!empty($config['callback']))
+                    $val = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
+
+                $inp = '<input type="hidden"'. implode(' ', $attr) . ' value="' . ($val ? $val : ($config['default'] ? $config['default'] : '')) . '" />';
+                echo $inp;
+
+                return false;
                 break;
 
 
@@ -558,13 +660,25 @@ class console
             case 'remove':
                 if (!$data) return false;
 
-                $inp = '<div class="form-group"><button class="btn btn-warning btn-operate btn-remove" data-operate="edit" data-remove="'.$data['id'].'" data-url="'.$_SERVER['REQUEST_URI'].'">'.$config['button'].'</button></div>';
+                $inp = '<div class="checkbox"><label><input type="checkbox" name="remove" value="'.$data['id'].'" /> '.$config['name'].'</label></div>';
+
                 break;
 
 
             // ========================= 完全自定义 =========================
             case 'custom':
-                $inp = call_user_func_array($config['callback'], array($val, &$data, &$class, &$inner));
+                $inp = call_user_func_array($config['callback'], array($val, &$data, &$class, &$attr, &$inner, $config));
+
+                if (!empty($config['plugin']))
+                {
+                    $return = call_user_func_array('\console\plugin::'.$config['plugin'], array(&$attr, &$class, &$inner, $config));
+                    if ($return)
+                    {
+                        $inp = $return;
+                        break;
+                    }
+                }
+
                 break;
 
 
@@ -587,6 +701,8 @@ class console
 
         if (isset($config['callback']))
             $config = call_user_func($config['callback'], $data);
+
+        if (!$config) return '';
 
         // Init
         $class = array('btn');
@@ -620,20 +736,16 @@ class console
                     $url = BASE_URL . '?module=' . MODULE . '&operate=edit&id=' . $data['id'];
 
                 if (empty($config['name']))
-                    $config['name'] = '编辑';
+                    $config['name'] = __('Edit');
 
                 if (empty($config['ico']))
                     $config['ico'] = 'glyphicon glyphicon-pencil';
 
                 break;
 
-            case 'deletes':
-                $class[] = 'btn-removes';
-                break;
-
             case 'delete':
                 if (empty($config['name']))
-                    $config['name'] = '移除';
+                    $config['name'] = __('Remove');
 
                 if (empty($config['ico']))
                     $config['ico'] = 'glyphicon glyphicon-trash';
@@ -673,7 +785,7 @@ class console
         {
             if ($url)
             {
-                $attr['data-pjax-container'] = 'data-pjax-container="#main"';
+                $attr['data-pjax'] = 'data-pjax="#main"';
                 $attr['href'] = 'href="'.$url.$suffix.'"';
             }
             else
@@ -700,9 +812,6 @@ class console
         {
             $content = $config['name'];
         }
-
-        if (!empty($config['class']))
-            $class[] = $config['class'];
 
         $class = implode(' ', $class);
         $attr = implode(' ', $attr);

@@ -1,6 +1,6 @@
 <div class="modal-header">
     <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-    <h4 class="modal-title"><?php echo ($data ? '修改' : '新增'), $config['name']; ?></h4>
+    <h4 class="modal-title"><?php echo $config['name']; ?></h4>
 </div>
 <div class="modal-body">
     <?php
@@ -43,15 +43,15 @@
         }
         ?>
 
-        <input type="hidden" name="id" value="<?php echo $data['id']; ?>" />
+        <input type="hidden" name="id" value="<?php echo $data ? $data['id'] : ''; ?>" />
         <?php if (isset($pid)) { ?>
         <input type="hidden" name="pid" value="<?php echo $pid; ?>" />
         <?php } ?>
     </form>
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
-    <button type="button" class="btn btn-primary btn-save">保存</button>
+    <button type="button" class="btn btn-default" data-dismiss="modal"><?php echo !empty($config['cancel']) ? $config['cancel'] : __('Cancel'); ?></button>
+    <button type="button" class="btn btn-primary btn-save"><?php echo !empty($config['submit']) ? $config['submit'] : __('Save'); ?></button>
 </div>
 
 
@@ -102,4 +102,3 @@ if ($inner['plugins']) {
     foreach($inner['plugins'] as $v)
         echo $v;
 }
-?>

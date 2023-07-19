@@ -22,7 +22,7 @@
         <!-- search -->
         <?php if ($config['search']) { ?>
         <div class="input-group hidden-xs hidden-sm">
-            <input type="text" name="keyword" class="form-control" autocomplete="off" value="<?php echo $keyword; ?>" data-search />
+            <input type="text" name="keyword" class="form-control" autocomplete="off" placeholder="<?php echo __('Search..'); ?>" value="<?php echo $keyword; ?>" data-search />
             <span class="input-group-btn">
                 <button class="btn btn-default" type="submit"><span class="glyphicon glyphicon-search"></span></button>
             </span>
@@ -62,6 +62,9 @@
                 <?php
                 $inner = array('styles'=>array());
 
+                if (!empty($config['style']))
+                    $inner['styles'][] = $config['style'];
+
                 foreach($config['fields'] as $v)
                 {
                     echo '<th';
@@ -76,7 +79,7 @@
                 }
                 if (!empty($config['buttons']))
                 {
-                    echo '<th class="bw'.count($config['buttons']).'">' . __('Operate') . '</th>';
+                    echo '<th class="operate-btns">' . __('Operate') . '</th>';
                 }
                 ?>
             </tr>
@@ -103,7 +106,7 @@
             ?>
                 <tr class="active">
                     <td colspan="<?php echo count($config['fields']) + (!empty($config['buttons']) ? 2 : 1); ?>">
-                        <div class="empty"><?=__('no_data') ?></div>
+                        <div class="empty"><?=__('No data') ?></div>
                     </td>
                 </tr>
             <?php

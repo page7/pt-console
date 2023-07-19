@@ -1,14 +1,23 @@
 // rewrite window function
+function __(msgid, pack) {
+    if (I18N !== undefined) {
+        if (pack !== undefined) {
+            return I18N[pack][msgid] ? I18N[pack][msgid] : msgid;
+        } else {
+            return I18N.common[msgid] ? I18N.common[msgid] : msgid;
+        }
+    }
+}
 
 function alert(msg, type, callback, container){
 
     if (type === undefined) type = 'error';
     var cla = 'alert-danger';
-    var stxt = '错误! ';
+    var stxt = __('Error! ');
     switch(type){
-        case 'error': cla = 'alert-danger'; stxt = '错误! '; break;
-        case 'warning': cla = 'alert-warning'; stxt = '警告! '; break;
-        case 'success': cla = 'alert-success'; stxt = '成功! '; break;
+        case 'error': cla = 'alert-danger'; stxt = __('Error! '); break;
+        case 'warning': cla = 'alert-warning'; stxt = __('Warning! '); break;
+        case 'success': cla = 'alert-success'; stxt = __('Success! '); break;
     }
 
     var di = $("<div class=\"alert "+cla+"\" role=\"alert\" style=\"display:none\"></div>");
@@ -35,31 +44,32 @@ function alert(msg, type, callback, container){
     });
 }
 
-/*
-function history(a){
-    var a = $(a), d = a.data(), li = a.parent();
-    if (d.status == "loading") return;
-    var tmp = $("<li class=\"list-group-item\"><span class=\"log\"><b></b></span><span class=\"time\"></span></li>");
 
-    a.text("正在读取..").data("status", "loading");
+function log(a){
+    var a = $(a),
+        d = a.data(), li = a.parent();
+    if (d.status == "loading") return;
+    var tmp = $("<li class=\"list-group-item\"><span class=\"msg\"><b></b></span><span class=\"time\"></span></li>");
+
+    a.text(__('Loading..')).data("status", "loading");
     $.get(d.url, {page:d.page}, function(data){
         if (data.s == 0){
             for (x in data.rs){
                 var t = data.rs[x],
                     c = tmp.clone();
-                c.children(".time").text(t.time).prev(".log").text(t.intro).prepend("<b></b>").children("b").text(t.username+" ").data("history", t.id);
+                c.children(".time").text(t.time).prev("msg").text(t.intro).prepend("<b></b>").children("b").text(t.username+" ").data("history", t.id);
                 li.before(c);
             }
             if (data.rs.length == 10)
-                a.text("查看更多记录").data({status:"loaded", page:parseInt(d.page,10)+1});
+                a.text('Load more..').data({status:"loaded", page:parseInt(d.page,10)+1});
             else
-                a.after("<span class=\"c9\">无更多记录</span>").remove();
+                a.after('<span class="c9">' + __('No more data') + '</span>').remove();
         }else{
-            a.text("读取失败，请重试").data("status", "loaded");
+            a.text('Fail to load, retry?').data("status", "loaded");
         }
     }, "json");
 }
-*/
+
 
 $(function(){
 
@@ -156,19 +166,22 @@ $(function(){
         })
     }
 
-    window.tinymces = [];
-
     if ($.support.pjax) {
 
-        doc.on('click', 'a[data-pjax]', $.pjax.click);
+        doc.on('click', 'a[data-pjax]', function(e) {
+            $.pjax.click(e, {scrollTo: win.scrollTop()})
+        });
 
         doc.on('pjax:beforeSend', function(event, xhr) {
 
             if (window.tinymces.length) {
                 $(window.tinymces).each(function(i){
-                    $(this).tinymce().editorManager.remove();
-                    window.tinymces.shift();
+                    var dom = $(this);
+                    if (dom.is("textarea"))
+                        dom.tinymce().editorManager.remove();
                 });
+
+                window.tinymces = [];
             }
 
             var container = $(event.target),
@@ -191,8 +204,12 @@ $(function(){
             var container = $(event.target);
             container.loadbar("hide");
             container.addClass("anim-show").removeClass("anim-hide");
-        });
+        }).on('pjax:scriptLoaded', function(event, script) {
+            var src = script.src,
+                file = src.replace(/(.*\/)*(.+)?/ig, "$2");
 
+            doc.trigger('scriptLoaded', [file]);
+        })
     }
 
     doc.on("keyup focus blur", "input[maxlength], textarea[maxlength]", function(e){
@@ -223,7 +240,7 @@ $(function(){
                 if (len == 0)
                     c.text('');
                 else
-                    c.text(len + '/' + max + '字');
+                    c.text(len + '/' + max + ' ' + __('lettes'));
 
                 if (len >= max)
                     c.addClass('over');
@@ -239,7 +256,7 @@ $(function(){
             operate = data.operate,
             url = location.search;
 
-        if (operate === undefined) return;
+        if (operate === undefined || b.is(".btn-operates")) return;
         delete data.operate;
 
         if (data.url !== undefined) {
@@ -254,13 +271,52 @@ $(function(){
             url = location.pathname + '?' + module[0];
         }
 
-        if (!b.is(".btn-remove") || window.confirm("此操作将使数据无法恢复，是否继续？")) {
-            b.prop("disabled", true);
-            $.post(url+'&operate=' + operate, data, function(data){
-                b.prop("disabled", false);
-                if (b.parents(".modal").length) {
-                    $("body").removeClass("modal-open");
+        b.prop("disabled", true);
+        $.post(url+'&operate=' + operate, data, function(data){
+            b.prop("disabled", false);
+            if (b.parents(".modal").length) {
+                $("body").removeClass("modal-open");
+            }
+            if (data.s == 0){
+                if ($.support.pjax) {
+                    $.pjax({ url: location.pathname + location.search + "&_=" + new Date().getTime(), container: "#main" });
+                } else {
+                    location.href = location.pathname + location.search + "&_=" + new Date().getTime();
                 }
+            } else if (data.s < 0 && data.rs.alert !== undefined) {
+                alert(data.err, data.rs.alert);
+            } else {
+                alert(data.err, "error");
+            }
+        }, "json");
+    });
+
+    doc.on("click", ".btn-operates", function(e){
+        var b = $(this),
+            data = b.data(),
+            operate = data.operate,
+            empty = data.empty,
+            confirm = data.confirm,
+            ids = [],
+            tr = $("table.table tbody tr"),
+            url = location.search;
+
+        for (var i = 0; i < tr.length; i ++) {
+            var ck = tr.eq(i).children("td").eq(0).children(":checked");
+            if (ck.length) {
+                ids.push(ck.val());
+            }
+        }
+
+        if (ids.length) {
+            if (confirm && !window.confirm(confirm))
+                return;
+
+            b.prop("disabled", true);
+
+            $.post(url+'&operate='+operate, {id:ids}, function(data){
+                b.prop("disabled", false);
+
                 if (data.s == 0){
                     if ($.support.pjax) {
                         $.pjax({ url: location.pathname + location.search + "&_=" + new Date().getTime(), container: "#main" });
@@ -299,6 +355,14 @@ $(function(){
 
     // Image Upload
     window.image_uploader = function(module, id, multiple, tmpl) {
+
+        if (typeof plupload !== "object") {
+            return doc.on("scriptLoaded", function(e, script) {
+                if (-1 != script.search('plupload'))
+                    window.image_uploader(module, id, multiple, tmpl)
+            });
+        }
+
         var updom = $("#"+id),
             path = updom.data("path"),
             multiple = multiple === undefined ? false : multiple,
@@ -321,7 +385,7 @@ $(function(){
                     },
 
                     FilesAdded: function(up, files) {
-                        updom.before('<div id="'+files[0].id+'" class="image image-loading">上传中..</div>');
+                        updom.before('<div id="'+files[0].id+'" class="image image-loading">' + __('Uploading..') + '</div>');
                         updom.hide();
                         up.start();
                     },
@@ -333,7 +397,7 @@ $(function(){
                     FileUploaded: function(up, file, res) {
                         if (res.status != 200) {
                             $("#" + file.id).remove();
-                            updom.show().addClass("image-error").text("网络异常");
+                            updom.show().addClass("image-error").text(__('Network anomaly'));
                             alert(data.err, 'error');
                         } else {
                             var data = $.parseJSON(res.response);
@@ -354,8 +418,8 @@ $(function(){
 
                             }else{
                                 $("#" + file.id).remove();
-                                updom.show().addClass("image-error").text("上传失败");
-                                alert("上传失败，错误：["+data.s+"]"+data.err, 'error');
+                                updom.show().addClass("image-error").text(__('Upload failed'));
+                                alert( __('Upload failed') + " Err["+data.s+"]"+data.err, 'error');
                                 updom.trigger("uploader:error");
                             }
                         }
@@ -369,11 +433,27 @@ $(function(){
             var that = $(this).parents(".image");
             updom.removeClass("image-error");
             if (!multiple)
-                updom.show().html('<input type="hidden" name="'+id+'" value="" />选择图片');
+                updom.show().html('<input type="hidden" name="'+id+'" value="" />' + __('Choose a picture'));
 
             that.remove();
             uploader.refresh();
         });
+    };
+
+
+    // editor
+    window.tinymces = [];
+
+    window.buildEditor = function(dom, conf) {
+
+        if (typeof $.fn.tinymce !== "function") {
+            return doc.on("scriptLoaded", function(e, script) {
+                if (-1 != script.search('tinymce'))
+                    window.buildEditor(dom, conf)
+            });
+        }
+
+        window.tinymces.push(dom.tinymce(conf));
     };
 
 
@@ -415,7 +495,7 @@ $(function(){
                             form = body.find("form");
 
                             btn.prop("disabled", true);
-                            if (btn.is(".btn-save")) btn.text("保存中..");
+                            if (btn.is(".btn-save")) btn.text(__('Saving..'));
 
                             $.post(form.attr("action"), form.serialize(), function(data){
                                 btn.prop("disabled", false)
@@ -446,7 +526,7 @@ $(function(){
                             .done(function(){ lazyDo(); })
                             .fail(function(){
                                 body.modal("hide").removeClass('modal-loading');
-                                alert("页面加载失败，请重试", "error");
+                                alert(__('Fail to load, retry?'), "error");
                             });
                     }
                 },
@@ -464,6 +544,7 @@ $(function(){
     });
 
 
+    $('[data-toggle="popover"]').popover();
 
 
 });

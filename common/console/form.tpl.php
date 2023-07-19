@@ -18,6 +18,8 @@
         {
             $class = ' ';
 
+            $field['field'] = $name;
+
             $inp = console::input($data, $class, $inner, $name, $field);
             if (false === $inp) continue;
 
@@ -31,7 +33,7 @@
 
             if (!empty($field['bind']))
             {
-                $script = '$("#form-' . NOW . ' [name=' . $field['field'] . ']")';
+                $script = '$("#form-' . NOW . ' [name=' . $name . ']")';
 
                 foreach ($field['bind'] as $event => $callback)
                 {
@@ -50,17 +52,17 @@
         <!-- panel -->
         <div class="panel panel-default">
             <div class="panel-heading">
-                <h3 class="panel-title">发布</h3>
+                <h3 class="panel-title">Update</h3>
             </div>
             <div class="panel-body panel-sm">
-                <p><span class="glyphicon glyphicon-time"></span> 上次更新: <?php echo $data && $data['updatetime'] ? date('Y-m-d H:i:s', $data['updatetime']) : '无'; ?></p>
-                <p><span class="glyphicon glyphicon-user"></span> 最后更新: <?php echo $data && $data['updator'] ? $data['updator'] : '无'; ?></p>
+                <p><span class="glyphicon glyphicon-time"></span> Update time: <?php echo $data && $data['updatetime'] ? date('Y-m-d H:i:s', $data['updatetime']) : __('None'); ?></p>
+                <p><span class="glyphicon glyphicon-user"></span> Update by: <?php echo $data && $data['updator'] ? $data['updator'] : __('None'); ?></p>
                 <p id="preview_qrcode"></p>
             </div>
 
             <div class="panel-footer text-right">
-                <a href="<?php echo BASE_URL?>?module=<?php echo MODULE; ?><?php echo $_suffix; ?>" data-pjax-container="#main" class="btn btn-flat btn-default btn-sm">返回</a>
-                <button type="button" class="btn btn-primary btn-sm btn-save">保存</button>
+                <a href="<?php echo BASE_URL?>?module=<?php echo MODULE; ?><?php echo $_suffix; ?>" data-pjax-container="#main" class="btn btn-flat btn-default btn-sm"><?php echo __('Back'); ?></a>
+                <button type="button" class="btn btn-primary btn-sm btn-save"><?php echo !empty($config['submit']) ? $config['submit'] : __('Save'); ?></button>
             </div>
 
         </div>
@@ -88,7 +90,14 @@
                     if (!empty($$key))
                     {
                         $_id = ${$key}['id'];
-                        $_edconf = array('ico'=>'glyphicon glyphicon-edit', 'title'=>'修改', 'name'=>'修改', 'mode'=>'modal', 'size'=>(empty($conf['size']) ? '' : $conf['size']), 'url'=> BASE_URL .'?module=' .MODULE ."&operate=edit&&id={$data['id']}&item={$key}&sid={$_id}");
+                        $_edconf = array(
+                            'ico'   => 'glyphicon glyphicon-edit',
+                            'title' => __('Edit'),
+                            'name'  => __('Edit'),
+                            'mode'  => 'modal',
+                            'size'  => (empty($conf['size']) ? '' : $conf['size']),
+                            'url'   => BASE_URL .'?module=' .MODULE ."&operate=edit&&id={$data['id']}&item={$key}&sid={$_id}"
+                        );
                         $conf['operate'] = array_merge(array('_edit'=>$_edconf), !empty($conf['operate']) ? $conf['operate'] : array());
                     }
                 }
@@ -218,7 +227,7 @@
 
                 if ($conf['type'] == 'child' || ($conf['type'] == 'extend' && empty($$key)))
                 {
-                    echo '<div class="list-group list-group-sm"><a class="list-group-item empty" href="#modal-subitem-'.$key.'" data-toggle="modal" data-url="?module='.MODULE.'&operate=edit&id='.$data['id'].'&item='.$key.'&sid=0">点击添加</a></div>';
+                    echo '<div class="list-group list-group-sm"><a class="list-group-item empty" href="#modal-subitem-'.$key.'" data-toggle="modal" data-url="?module='.MODULE.'&operate=edit&id='.$data['id'].'&item='.$key.'&sid=0">'.__('Create').'</a></div>';
                 }
             }
             ?>
@@ -232,7 +241,7 @@
 
     </div>
 
-    <input type="hidden" name="id"  value="<?php echo $data['id']; ?>"  />
+    <input type="hidden" name="id"  value="<?php echo $data ? $data['id'] : ''; ?>"  />
 
 </form>
 <!-- end form -->
@@ -284,36 +293,43 @@ if ($modal)
 <script src="<?php echo RESOURCES_URL; ?>js/jquery.chosen.js"></script>
 <?php } ?>
 
+<?php
+if ($inner['plugins']) {
+    foreach($inner['plugins'] as $v)
+        echo $v;
+}
+?>
+
 <script>
-$(function(){
+<?php echo '$(', (IS_PJAX ? 'document).one(\'pjax:success\', function(){' : 'function(){'), "\r\n"; ?>
 
-    // Save
-    $("#form-<?php echo NOW; ?> .btn-save").click(function(){
-        var btn = $(this), data = $("#form-<?php echo NOW; ?>").serialize();
-        btn.prop("disabled", true).text("保存中..");
-        $.post("<?php echo BASE_URL; ?>?module=<?php echo MODULE; ?>&operate=edit", data, function(data){
-            btn.prop("disabled", false).text("保存");
-            if (data.s == 0){
-                <?php
-                echo 'var url="?module='.MODULE.'&operate=edit&id=" + data.rs + "' . $_suffix .'#success";
-                if ($.support.pjax) {
-                    $.pjax({ url: url, container: "#main" });
-                } else {
-                    location.href = url;
-                }';
-                ?>
-            } else if (data.s < 0 && data.rs.alert !== undefined) {
-                alert(data.err, data.rs.alert);
+// Save
+$("#form-<?php echo NOW; ?> .btn-save").click(function(){
+    var btn = $(this), data = $("#form-<?php echo NOW; ?>").serialize();
+    btn.prop("disabled", true).text("<?php echo __('Saving..'); ?>");
+    $.post("<?php echo BASE_URL; ?>?module=<?php echo MODULE; ?>&operate=edit", data, function(data){
+        btn.prop("disabled", false).text("<?php echo __('Save'); ?>");
+        if (data.s == 0){
+            <?php
+            echo 'var url="?module='.MODULE.'&operate=edit&id=" + data.rs + "' . $_suffix .'#success";
+            if ($.support.pjax) {
+                $.pjax({ url: url, container: "#main" });
             } else {
-                alert(data.err, 'error');
-            }
-        }, "json");
-    });
+                location.href = url;
+            }';
+            ?>
+        } else if (data.s < 0 && data.rs.alert !== undefined) {
+            alert(data.err, data.rs.alert);
+        } else {
+            alert(data.err, 'error');
+        }
+    }, "json");
+});
 
-    if (location.hash == "#success") {
-        alert('保存成功', 'success');
-        location.hash = '';
-    }
+if (location.hash == "#success") {
+    alert('<?php echo __('Data saved successfully.'); ?>', 'success');
+    location.hash = '';
+}
 
 
 <?php
@@ -328,7 +344,35 @@ $(function(){
     }
 
     if (isset($inner['script_select'])) {
-        echo "$(\".ui-select\").chosen({disable_search_threshold:10, width:\"100%\"});\r\n";
+        $default_conf = array('width'=>'100%');
+        $sp_conf = array();
+        echo
+        'var init_chosen = function(){
+            $(".ui-select")';
+
+        if ($inner['script_select']) {
+            foreach ($inner['script_select'] as $k => $conf) {
+                echo '.not("'.$k.'")';
+                $sp_conf[] = '$("'.$k.'").chosen('.json_encode(array_merge($default_conf, $conf), JSON_UNESCAPED_UNICODE).');';
+            }
+        }
+
+        echo '.chosen(' .json_encode($default_conf) . ');'."\r\n";
+
+        if ($sp_conf)
+            echo implode("\r\n", $sp_conf);
+
+        echo '};';
+        if (IS_PJAX) {
+            echo 'if ($.fn.chosen !== "function") {
+                $(document).on("scriptLoaded", function(e, script) {
+                    if (-1 != script.search("chosen"))
+                        init_chosen();
+                });
+            }';
+        } else {
+            echo "init_chosen();\r\n";
+        }
     }
 
     if (isset($inner['script_image'])) {
@@ -381,18 +425,13 @@ $(function(){
                 'content_css'   => RESOURCES_URL . '/js/tinymce/full.css',
             );
 
-            $conf = array_merge($base, ($v['mode'] && isset($$v['mode']) ? $$v['mode'] : $full), $v['config']);
+            $conf = array_merge($base,  ($v['mode'] && isset(${$v['mode']}) ? ${$v['mode']} : $full),    $v['config']);
 
-            echo "window.tinymces.push($(\"#{$v['id']}\").tinymce(" . json_encode($conf) . "));";
+            echo "window.buildEditor($(\"#{$v['id']}\"), " . json_encode($conf) . ");";
         }
     }
-?>
-});
-</script>
 
-<?php
-if ($inner['plugins']) {
-    foreach($inner['plugins'] as $v)
-        echo $v;
-}
+
+echo '});';
 ?>
+</script>

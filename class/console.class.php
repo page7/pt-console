@@ -240,7 +240,7 @@ class console
                                 event::trigger('console::form_save_field_empty', $field, $val);
 
                                 if (is_bool($field['must']))
-                                    json_return(null, 1, $field['name'] . __(' cannot be black.'));
+                                    json_return(null, 1, $field['name'] . '不能为空');
                                 else
                                     json_return(null, 1, $field['must']);
                             }
@@ -273,7 +273,7 @@ class console
             if (false === $rs)
             {
                 event::trigger('console::form_'.(console::$mode == 1 ? 'save' : 'delete').'_fail', 101, $data, $table);
-                json_return(null, 101, __('Save data fail.'));
+                json_return(null, 101, '数据保存失败');
             }
 
             event::trigger('console::form_'.(console::$mode == 1 ? 'save' : 'delete').'_success', $rs, $data, $table);
@@ -456,7 +456,7 @@ class console
                     $inner['script_text'][] = 'input_append_'.NOW;
 
                     $inp  .=  '<div id="input_append_'.NOW.'" data-max="'.$config['max'].'" class="empty">'
-                            . '<span class="glyphicon glyphicon-plus"></span> '.__('Add a new field input..')
+                            . '<span class="glyphicon glyphicon-plus"></span> 新增一行'
                             . '</div>';
                 }
 
@@ -517,12 +517,12 @@ class console
                     $options = $config['options'];
 
                 $selected = array($val);
-                $placeholder = __('Select an option');
+                $placeholder = '请选择..';
 
                 if (!empty($config['multiple']))
                 {
 
-                    $placeholder = __('Select some options');
+                    $placeholder = '请选择..';
 
                     $attr[0] = "name=\"{$name}[]\"";
                     $attr[] = 'multiple size=1';
@@ -611,7 +611,7 @@ class console
                     $inner['script_image'] = array();
 
                 $multiple = isset($config['multiple']) && $config['multiple'];
-                $val = array_filter(explode(',', $val));
+                $val = $val ? array_filter(explode(',', $val)) : array();
 
                 $tmpl = isset($config['action_tmpl']) ? $config['action_tmpl'] : '<label class="action"><a class="rm" href="javascript:;"></a></label>';
 
@@ -638,7 +638,7 @@ class console
                 }
 
                 $inp  .=  '<div id="' . $name . '" '.($val && !$multiple ? 'style="display:none" ' : '').'class="image image-empty" data-path="'.self::$upload_path.'">'
-                        . ($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />') . __('Choose a picture')
+                        . ($val && !$multiple ? '' : '<input type="hidden" name="'.$name.($multiple ? '[]' : '').'" value="" />') . '选择图片'
                         . '</div>';
                 break;
 
@@ -692,7 +692,7 @@ class console
 
 
     // 按钮格式化
-    static public function button($operate, $config, $data, $type='button', $suffix='', &$modal)
+    static public function button($operate, $config, $data, $type='button', $suffix='', &$modal=array())
     {
         $_conf = $config;
 
@@ -702,7 +702,7 @@ class console
         if (isset($config['callback']))
             $config = call_user_func($config['callback'], $data);
 
-        if (!$config) return '';
+        if ($config === false) return '';
 
         // Init
         $class = array('btn');
@@ -736,7 +736,7 @@ class console
                     $url = BASE_URL . '?module=' . MODULE . '&operate=edit&id=' . $data['id'];
 
                 if (empty($config['name']))
-                    $config['name'] = __('Edit');
+                    $config['name'] = '编辑';
 
                 if (empty($config['ico']))
                     $config['ico'] = 'glyphicon glyphicon-pencil';
@@ -745,7 +745,7 @@ class console
 
             case 'delete':
                 if (empty($config['name']))
-                    $config['name'] = __('Remove');
+                    $config['name'] = '移除';
 
                 if (empty($config['ico']))
                     $config['ico'] = 'glyphicon glyphicon-trash';
